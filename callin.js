@@ -131,44 +131,6 @@ callin.prototype.set = function( obj )
 	}
 };
 
-callin.prototype.invoke = function( methods, tick, ctx, callback )
-{
-	if( methods )
-	{
-		var delegator = this.delegator,
-			method = undefined,
-			invokeNext = function( ontick )
-			{
-				if( ( method = methods.shift() ) )
-				{
-					if( typeof delegator[method.name] === 'function' )
-					{
-						if( ontick )
-						{
-							process.nextTick( function(){
-								delegator[method.name]( ctx, method, invokeNext, ontick );
-							});
-						}
-						else {
-							delegator[method.name]( ctx, method, invokeNext, ontick );
-						}
-					}
-					else {
-						invokeNext( ontick );
-					}
-				}
-				else {
-					callback();
-				}
-			};
-		
-		invokeNext( tick );
-	}
-	else {
-		callback();
-	}
-};
-
 callin.prototype.calling = function( uri, tick, ctx, callback )
 {
 	var routes = ROUTES[this.id],
@@ -197,15 +159,27 @@ callin.prototype.calling = function( uri, tick, ctx, callback )
 				}
 			}
 			// no more methods
-			else {
-				callback();
+			else
+			{
+				if( typeof callback === 'string' ){
+					delegator[callback]( ctx );
+				}
+				else {
+					callback();
+				}
 			}
 		},
 		// callback from delegator
 		invokeNext = function( ontick, done )
 		{
-			if( done ){
-				callback();
+			if( done )
+			{
+				if( typeof callback === 'string' ){
+					delegator[callback]( ctx );
+				}
+				else {
+					callback();
+				}
 			}
 			else {
 				tick = ontick;
