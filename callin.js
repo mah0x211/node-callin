@@ -2,11 +2,11 @@
     callin.js
     author: masatoshi teruya
     email: mah0x211@gmail.com
-    copyright (C) 2011, masatoshi teruya. all rights reserved.
+    copyright (C) 2011-2012, masatoshi teruya. all rights reserved.
     
     CREATE CALLER:
         var callin = new callin( delegator );
-                    
+    
     ADDING ROUTING TABLE
         router.set( routing_table_format:Object );
 
@@ -26,17 +26,8 @@
             },
             ...
         }
-    
-    CALL:
-        router.calling( '/path/to/uri1':String, use_process.nextTick:Boolean, your_context:Object, callback:Function );
-            if found directive for route:'/path/to/uri1'
-                if defined function delegate.method1
-                    delegate.method1( your_context, method:Object, runNext:Function, use_process.nextTick:Boolean );
-                else
-                    check next uri
-            else
-                callback()
 */
+
 var SIGNAMES = [
         'SIGHUP', 'SIGINT', 'SIGQUIT', 'SIGILL', 
         'SIGTRAP', 'SIGABRT', 'SIGEMT', 'SIGFPE', 
@@ -47,25 +38,51 @@ var SIGNAMES = [
         'SIGVTALRM', 'SIGPROF', 'SIGWINCH', 'SIGINFO', 
         'SIGUSR1', 'SIGUSR2'
     ],
-    ROUTES = [];
+    ROUTES = [],
+    fnNo2Slash = function( path, rmTail )
+    {
+        if( typeof path === 'string' )
+        {
+            if( rmTail ){
+                path = path.replace( /\/{2,}/g, '/' ).replace( /\/+$/, '' );
+            }
+            else {
+                path = path.replace( /\/{2,}/g, '/' );
+            }
+            return path;
+        }
+        return undefined;
+    };
 
-function callin( delegator )
+function callin( delegator, isStatic )
 {
-    var id = ROUTES.length;
+    var id = ROUTES.length,
+        static = ( isStatic ) ? true : false;
     
     ROUTES[id] = {};
-    this.__defineGetter__( 'id', function(){
+    this.__defineGetter__('id', function(){
         return id;
+    });
+    this.__defineGetter__('isStatic',function(){
+        return static;
     });
     this.__defineGetter__( 'delegator', function(){
         return delegator;
     });
+    this.__defineGetter__( 'routes',function(){
+        return JSON.parse( JSON.stringify( ROUTES[id] ) );
+    });
     // add signal events
     SIGNAMES.forEach( function( signame )
     {
-        if( typeof delegator[signame] === 'function' ){
-            process.on( signame, function(){
-                delegator[signame].apply( delegator, arguments );
+        if( typeof delegator[signame] === 'function' )
+        {
+            process.on( signame, function()
+            {
+                var method = delegator[signame];
+                if( typeof method === 'function' ){
+                        method.apply( delegator, arguments );
+                }
             });
         }
     });
@@ -74,23 +91,25 @@ function callin( delegator )
 callin.prototype.get = function( uri )
 {
     var routes = ROUTES[this.id],
-        // root directive
-        methods = ( routes['/'] ) ? [].concat( routes['/'] ) : undefined,
-        path = '',
-        obj,len;
+        // get root directive
+        methods = ( routes['/'] ) ? [].concat( routes['/'] ) : undefined;
     
     // search directive
-    uri = uri.replace( /\/{2,}/g, '/' ).replace( /\/+$/, '' ).split('/');
-    if( uri[0] === '' ){
-        uri.shift();
-    }
-    len = uri.length;
-    while( ( len-- ) )
+    uri = fnNo2Slash( uri, true );
+    if( typeof uri === 'string' )
     {
-        path += '/' + uri.shift();
-        obj = routes[path];
-        if( obj ){
-            methods = methods.concat( obj );
+        var path,obj;
+        
+        uri = uri.split('/');
+        if( uri[0] === '' ){
+            uri.shift();
+        }
+        for( var i = 0, len = uri.length; i < len; i++ )
+        {
+            path += '/' + uri[i];
+            if( ( obj = routes[path] ) ){
+                methods = methods.concat( obj );
+            }
         }
     }
     
@@ -99,136 +118,191 @@ callin.prototype.get = function( uri )
 
 callin.prototype.add = function( uri, directive )
 {
-    if( typeof uri === 'string' && directive instanceof Object )
+    if( typeof uri !== 'string' ){
+        throw TypeError('uri must be type of String');
+    }
+    else if( !( directive instanceof Object ) ){
+        throw TypeError('directive must be type of Object');
+    }
+    else
     {
-        var routes = ROUTES[this.id],
-            p;
+        var routes = ROUTES[this.id];
         
+        if( !( uri = fnNo2Slash( uri ) ) ){
+            uri = '/';
+        }
         if( !routes[uri] ){
             routes[uri] = [];
         }
-        for( p in directive ){
-            routes[uri].push( { name:p, args:directive[p], uri:uri } );
+        
+        for( var method in directive )
+        {
+            // pre-check delegator implements if static flag is true
+            if( this.isStatic && typeof this.delegator[method] !== 'function' ){
+                console.warn('delegator does not implement method "' + method +  '"');
+                continue;
+            }
+            routes[uri].push({ 
+                name:method, 
+                args:JSON.parse( JSON.stringify( directive[method] ) ), 
+                uri:uri 
+            });
         }
+        
+        if( !routes[uri].length ){
+            delete routes[uri];
+        }
+        
+        return true;
     }
+    
+    return false;
 };
 
 callin.prototype.remove = function( uri )
 {
     var routes = ROUTES[this.id];
-    if( routes[uri] ){
+    
+    if( typeof uri === 'string' && routes[uri] ){
         delete routes[uri];
+        return true;
     }
+    
+    return false;
 };
 
 callin.prototype.set = function( obj )
 {
-    var path,p;
+    var path,methods;
     
-    for( p in obj ){
-        path = p.replace( /\/{2,}/g, '/' ).replace( /\/+$/, '' );
-        this.add( ( path.length ) ? path : '/', obj[p] );
+    for( var path in obj )
+    {
+        methods = obj[path];
+        if( typeof path !== 'string' ){
+            throw TypeError('invalid type of path: ' + ( typeof path ) );
+        }
+        else if( !( methods instanceof Array ) ){
+            throw TypeError('invalid type of method list: ' + ( typeof methods ) );
+        }
+        else
+        {
+            if( !( path = fnNo2Slash( path, true ) ) ){
+                path = '/';
+            }
+            for( var i = 0, len = methods.length; i < len; i++ ){
+                this.add( path, methods[i] );
+            }
+        }
     }
 };
 
 callin.prototype.calling = function( uri, tick, ctx, callback )
 {
-    var routes = ROUTES[this.id],
-        delegator = this.delegator,
-        methods = undefined,
-        path = '',
-        len = 0,
-        // find method
-        nextPathMethods = function()
-        {
-            if( len-- )
+    // replace double and last slash then split
+    uri = fnNo2Slash( uri, true );
+    if( typeof uri === 'string' )
+    {
+        var routes = ROUTES[this.id],
+            delegator = this.delegator,
+            methods = undefined,
+            path = '',
+            len = 0,
+            // find method
+            nextPathMethods = function()
             {
-                path += '/' + uri.shift();
-                if( routes[path] ){
-                    methods = [].concat( routes[path] );
+                if( len-- )
+                {
+                    path += '/' + uri.shift();
+                    if( routes[path] ){
+                        methods = [].concat( routes[path] );
+                        walkArray();
+                    }
+                    else
+                    {
+                        if( tick ){
+                            process.nextTick( nextPathMethods );
+                        }
+                        else {
+                            nextPathMethods();
+                        }
+                    }
+                }
+                // no more methods
+                else
+                {
+                    if( typeof callback === 'string' ){
+                        delegator[callback]( ctx );
+                    }
+                    else {
+                        callback();
+                    }
+                }
+            },
+            // callback from delegator
+            invokeNext = function( ontick, done )
+            {
+                if( done )
+                {
+                    if( typeof callback === 'string' ){
+                        delegator[callback]( ctx );
+                    }
+                    else {
+                        callback();
+                    }
+                }
+                else {
+                    tick = ontick;
                     walkArray();
+                }
+            },
+            // walk method array
+            walkArray = function()
+            {
+                var m = methods.shift();
+                
+                if( !m ){
+                    nextPathMethods();
                 }
                 else
                 {
-                    if( tick ){
-                        process.nextTick( nextPathMethods );
-                    }
-                    else {
-                        nextPathMethods();
-                    }
-                }
-            }
-            // no more methods
-            else
-            {
-                if( typeof callback === 'string' ){
-                    delegator[callback]( ctx );
-                }
-                else {
-                    callback();
-                }
-            }
-        },
-        // callback from delegator
-        invokeNext = function( ontick, done )
-        {
-            if( done )
-            {
-                if( typeof callback === 'string' ){
-                    delegator[callback]( ctx );
-                }
-                else {
-                    callback();
-                }
-            }
-            else {
-                tick = ontick;
-                walkArray();
-            }
-        },
-        // walk method array
-        walkArray = function()
-        {
-            var m = methods.shift();
-            
-            if( !m ){
-                nextPathMethods();
-            }
-            else
-            {
-                // call delegate method
-                if( typeof delegator[m.name] === 'function' )
-                {
-                    if( tick ){
-                        process.nextTick( function(){
+                    // call delegate method
+                    if( typeof delegator[m.name] === 'function' )
+                    {
+                        if( tick ){
+                            process.nextTick( function(){
+                                delegator[m.name]( ctx, m, invokeNext, tick );
+                            });
+                        }
+                        else {
                             delegator[m.name]( ctx, m, invokeNext, tick );
-                        });
+                        }
                     }
+                    // next sibling
                     else {
-                        delegator[m.name]( ctx, m, invokeNext, tick );
+                        walkArray();
                     }
                 }
-                // next sibling
-                else {
-                    walkArray();
-                }
-            }
-        };
+            };
+        
+        uri = uri.split('/');
+        if( uri[0] === '' ){
+            uri.shift();
+        }
+        len = uri.length;
+        // root directive
+        if( routes['/'] ){
+            methods = [].concat( routes['/'] );
+            walkArray();
+        }
+        else{
+            nextPathMethods();
+        }
+        
+        return true;
+    }
     
-    // replace double and last slash then split
-    uri = uri.replace( /\/{2,}/g, '/' ).replace( /\/+$/, '' ).split('/');
-    if( uri[0] === '' ){
-        uri.shift();
-    }
-    len = uri.length;
-    // root directive
-    if( routes['/'] ){
-        methods = [].concat( routes['/'] );
-        walkArray();
-    }
-    else{
-        nextPathMethods();
-    }
+    return false;
 };
 
 module.exports = callin;
+

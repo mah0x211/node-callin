@@ -1,19 +1,12 @@
 {
     "name": "callin",
     "description": "method router for node.js",
-    "version": "0.0.2",
-    "homepage": "http://github.com/mah0x211/node-callin",
+    "author": "Masatoshi Teruya <mah0x211@gmail.com>",
+    "version": "0.0.3",
     "main": "./callin",
     "engines": {
         "node": ">= 0.4.7"
     },
-    "maintainers": [
-        {
-            "name": "Masatoshi Teruya",
-            "email": "mah0x211@gmail",
-            "web": "http://kontext.jp/"
-        }
-    ],
     "repository": {
         "type": "git",
         "url": "http://github.com/mah0x211/node-callin.git"
