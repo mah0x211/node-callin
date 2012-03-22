@@ -119,10 +119,19 @@ callin.prototype.get = function( uri )
 callin.prototype.add = function( uri, directive )
 {
     if( typeof uri !== 'string' ){
-        throw TypeError('uri must be type of String');
+        console.warn('uri must be type of String');
     }
     else if( !( directive instanceof Object ) ){
-        throw TypeError('directive must be type of Object');
+        console.warn('directive must be type of Object');
+    }
+    else if( !directive.name ){
+        console.warn( 'directive.name undefined' );
+    }
+    else if( typeof directive.name !== 'string' ){
+        console.warn('directive.name must be type of String');
+    }
+    else if( directive.args && !( directive.args instanceof Array ) ){
+        console.warn('directive.args must be type of Array');
     }
     else
     {
@@ -131,29 +140,23 @@ callin.prototype.add = function( uri, directive )
         if( !( uri = fnNo2Slash( uri ) ) ){
             uri = '/';
         }
-        if( !routes[uri] ){
-            routes[uri] = [];
-        }
         
-        for( var method in directive )
+        // pre-check delegator implements if static flag is true
+        if( this.isStatic && typeof this.delegator[directive.name] !== 'function' ){
+            console.warn('delegator does not implement method "' + directive.name +  '"');
+        }
+        else
         {
-            // pre-check delegator implements if static flag is true
-            if( this.isStatic && typeof this.delegator[method] !== 'function' ){
-                console.warn('delegator does not implement method "' + method +  '"');
-                continue;
+            if( !routes[uri] ){
+                routes[uri] = [];
             }
             routes[uri].push({ 
-                name:method, 
-                args:JSON.parse( JSON.stringify( directive[method] ) ), 
+                name: directive.name, 
+                args: JSON.parse( JSON.stringify( directive.args ) ), 
                 uri:uri 
             });
+            return true;
         }
-        
-        if( !routes[uri].length ){
-            delete routes[uri];
-        }
-        
-        return true;
     }
     
     return false;
@@ -251,7 +254,7 @@ callin.prototype.calling = function( uri, tick, ctx, callback )
                     }
                 }
                 else {
-                    tick = ontick;
+                    tick = ( ontick === true );
                     walkArray();
                 }
             },

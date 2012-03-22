@@ -2,7 +2,7 @@
     "name": "callin",
     "description": "method router for node.js",
     "author": "Masatoshi Teruya <mah0x211@gmail.com>",
-    "version": "0.0.3",
+    "version": "0.0.4",
     "main": "./callin",
     "engines": {
         "node": ">= 0.4.7"
