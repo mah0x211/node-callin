@@ -10,22 +10,21 @@
     ADDING ROUTING TABLE
         router.set( routing_table_format:Object );
 
-        ROUTING TABLE FORMAT:
+    ROUTING TABLE FORMAT:
         {
-            "/path/to/url1": {
-                "method1": "args",
-                "method2": ["args"],
-                "method3": { "arg": val },
-                ...
-            },
-            "/path/to/url2": {
-                "method1": "args",
-                "method2": ["args"],
-                "method3": { "arg": val },
-                ...
-            },
-            ...
-        }
+            "/": [
+                { name: "methodName1", args: "" }
+            ],
+            "/index.htm": [
+                { name: "methodName2", args: "" }
+            ],
+            "/home/": [
+                { name: "methodName3", args: "" }
+            ],
+            "/home/index.htm": [
+                { name: "methodName4", args: "" }
+            ],
+        };
 */
 
 var SIGNAMES = [
