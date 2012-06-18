@@ -237,7 +237,7 @@ callin.prototype.calling = function( uri, tick, ctx, callback )
                         delegator[callback]( ctx );
                     }
                     else {
-                        callback();
+                        callback( ctx );
                     }
                 }
             },
@@ -250,7 +250,7 @@ callin.prototype.calling = function( uri, tick, ctx, callback )
                         delegator[callback]( ctx );
                     }
                     else {
-                        callback();
+                        callback( ctx );
                     }
                 }
                 else {
