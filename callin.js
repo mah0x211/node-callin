@@ -151,9 +151,10 @@ callin.prototype.add = function( uri, directive )
             }
             routes[uri].push({ 
                 name: directive.name, 
-                args: JSON.parse( JSON.stringify( directive.args ) ), 
+                args: directive.args||undefined, 
                 uri:uri 
             });
+            
             return true;
         }
     }
