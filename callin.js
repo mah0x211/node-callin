@@ -53,7 +53,7 @@ var SIGNAMES = [
         return undefined;
     };
 
-function callin( delegator, isStatic )
+function callin( delegator, isStatic, route )
 {
     var id = ROUTES.length,
         static = ( isStatic ) ? true : false;
@@ -85,6 +85,10 @@ function callin( delegator, isStatic )
             });
         }
     });
+    // set route if defined
+    if( route ){
+        this.set( route );
+    }
 }
 
 callin.prototype.get = function( uri )
