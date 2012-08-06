@@ -38,39 +38,31 @@ var SIGNAMES = [
         'SIGUSR1', 'SIGUSR2'
     ],
     ROUTES = [],
+    RE_SLASHES = new RegExp( '/{2,}', 'g' ),
+    RE_TAIL_SLASH = new RegExp( '/+$' ),
     fnNo2Slash = function( path, rmTail )
     {
         if( typeof path === 'string' )
         {
             if( rmTail ){
-                path = path.replace( /\/{2,}/g, '/' ).replace( /\/+$/, '' );
+                path = path.replace( RE_SLASHES, '/' )
+                           .replace( RE_TAIL_SLASH, '' );
             }
             else {
-                path = path.replace( /\/{2,}/g, '/' );
+                path = path.replace( RE_SLASHES, '/' );
             }
+            
             return path;
         }
+        
         return undefined;
     };
 
 function callin( delegator, isStatic, route )
 {
-    var id = ROUTES.length,
-        static = ( isStatic ) ? true : false;
+    this.routes = {};
+    this.isStatic = ( isStatic ) ? true : false;
     
-    ROUTES[id] = {};
-    this.__defineGetter__('id', function(){
-        return id;
-    });
-    this.__defineGetter__('isStatic',function(){
-        return static;
-    });
-    this.__defineGetter__( 'delegator', function(){
-        return delegator;
-    });
-    this.__defineGetter__( 'routes',function(){
-        return JSON.parse( JSON.stringify( ROUTES[id] ) );
-    });
     // add signal events
     SIGNAMES.forEach( function( signame )
     {
@@ -85,9 +77,15 @@ function callin( delegator, isStatic, route )
             });
         }
     });
+    
+    // getter/setter
+    this.__defineGetter__( 'delegator', function(){
+        return delegator;
+    });
+    
     // set route if defined
     if( route ){
-        this.set( route );
+        this.setRoute( route );
     }
 }
 
@@ -119,7 +117,7 @@ callin.prototype.get = function( uri )
     return ( methods.length ) ? methods : undefined;
 };
 
-callin.prototype.add = function( uri, directive )
+callin.prototype.addRoute = function( uri, directive )
 {
     if( typeof uri !== 'string' ){
         console.warn('uri must be type of String');
@@ -138,18 +136,21 @@ callin.prototype.add = function( uri, directive )
     }
     else
     {
-        var routes = ROUTES[this.id];
-        
-        if( !( uri = fnNo2Slash( uri ) ) ){
-            uri = '/';
-        }
-        
         // pre-check delegator implements if static flag is true
-        if( this.isStatic && typeof this.delegator[directive.name] !== 'function' ){
-            console.warn('delegator does not implement method "' + directive.name +  '"');
+        if( this.isStatic && 
+            typeof this.delegator[directive.name] !== 'function' ){
+            console.warn(
+                'delegator does not implement method "' + 
+                directive.name +  '"'
+            );
         }
         else
         {
+            var routes = this.routes;
+            
+            if( !( uri = fnNo2Slash( uri ) ) ){
+                uri = '/';
+            }
             if( !routes[uri] ){
                 routes[uri] = [];
             }
@@ -166,25 +167,23 @@ callin.prototype.add = function( uri, directive )
     return false;
 };
 
-callin.prototype.remove = function( uri )
+callin.prototype.removeRoute = function( uri )
 {
-    var routes = ROUTES[this.id];
-    
-    if( typeof uri === 'string' && routes[uri] ){
-        delete routes[uri];
+    if( typeof uri === 'string' && this.routes[uri] ){
+        delete this.routes[uri];
         return true;
     }
     
     return false;
 };
 
-callin.prototype.set = function( obj )
+callin.prototype.setRoute = function( route )
 {
     var path,methods;
     
-    for( var path in obj )
+    for( var path in route )
     {
-        methods = obj[path];
+        methods = route[path];
         if( typeof path !== 'string' ){
             throw TypeError('invalid type of path: ' + ( typeof path ) );
         }
@@ -197,112 +196,46 @@ callin.prototype.set = function( obj )
                 path = '/';
             }
             for( var i = 0, len = methods.length; i < len; i++ ){
-                this.add( path, methods[i] );
+                this.addRoute( path, methods[i] );
             }
         }
     }
 };
 
+
 callin.prototype.calling = function( uri, tick, ctx, callback )
 {
     // replace double and last slash then split
     uri = fnNo2Slash( uri, true );
-    if( typeof uri === 'string' )
+    if( uri )
     {
-        var routes = ROUTES[this.id],
-            delegator = this.delegator,
-            methods = undefined,
-            path = '',
-            len = 0,
-            // find method
-            nextPathMethods = function()
-            {
-                if( len-- )
-                {
-                    path += '/' + uri.shift();
-                    if( routes[path] ){
-                        methods = [].concat( routes[path] );
-                        walkArray();
-                    }
-                    else
-                    {
-                        if( tick ){
-                            process.nextTick( nextPathMethods );
-                        }
-                        else {
-                            nextPathMethods();
-                        }
-                    }
-                }
-                // no more methods
-                else
-                {
-                    if( typeof callback === 'string' ){
-                        delegator[callback]( ctx );
-                    }
-                    else {
-                        callback( ctx );
-                    }
-                }
-            },
-            // callback from delegator
-            invokeNext = function( ontick, done )
-            {
-                if( done )
-                {
-                    if( typeof callback === 'string' ){
-                        delegator[callback]( ctx );
-                    }
-                    else {
-                        callback( ctx );
-                    }
-                }
-                else {
-                    tick = ( ontick === true );
-                    walkArray();
-                }
-            },
-            // walk method array
-            walkArray = function()
-            {
-                var m = methods.shift();
-                
-                if( !m ){
-                    nextPathMethods();
-                }
-                else
-                {
-                    // call delegate method
-                    if( typeof delegator[m.name] === 'function' )
-                    {
-                        if( tick ){
-                            process.nextTick( function(){
-                                delegator[m.name]( ctx, m, invokeNext, tick );
-                            });
-                        }
-                        else {
-                            delegator[m.name]( ctx, m, invokeNext, tick );
-                        }
-                    }
-                    // next sibling
-                    else {
-                        walkArray();
-                    }
-                }
+        var tracer = {
+                __proto__: null,
+                delegator: this.delegator,
+                routes: this.routes,
+                uri: uri.split('/'),
+                tail: 0,
+                pos: 0,
+                methods: undefined,
+                midx: 0,
+                path: '',
+                tick: tick,
+                ctx: ctx,
+                callback: callback
             };
         
-        uri = uri.split('/');
-        if( uri[0] === '' ){
-            uri.shift();
+        if( tracer.uri[0] === '' ){
+            tracer.uri.shift();
         }
-        len = uri.length;
+        tracer.tail = tracer.uri.length;
+        tracer.methods = tracer.routes['/'];
+
         // root directive
-        if( routes['/'] ){
-            methods = [].concat( routes['/'] );
-            walkArray();
+        if( tracer.methods ){
+            callin.invokeMethod( tracer );
         }
         else{
-            nextPathMethods();
+            callin.findNextPathMethods( tracer );
         }
         
         return true;
@@ -310,6 +243,88 @@ callin.prototype.calling = function( uri, tick, ctx, callback )
     
     return false;
 };
+
+// find method
+callin.findNextPathMethods = function( tracer )
+{
+    if( tracer.pos < tracer.tail )
+    {
+        tracer.path += '/' + tracer.uri[tracer.pos++];
+        tracer.methods = tracer.routes[tracer.path];
+        if( tracer.methods ){
+            tracer.midx = 0;
+            callin.invokeMethod( tracer );
+        }
+        else {
+            callin.findNextPathMethods( tracer );
+        }
+    }
+    // no more path
+    else
+    {
+        if( typeof tracer.callback === 'string' ){
+            tracer.delegator[tracer.callback]( tracer.ctx );
+        }
+        else {
+            tracer.callback( tracer.ctx );
+        }
+    }
+};
+
+// walk method array
+callin.invokeMethod = function( tracer )
+{
+    var method = tracer.methods[tracer.midx++],
+        invokeNext = function( ontick, done )
+        {
+            if( done )
+            {
+                if( typeof tracer.callback === 'string' ){
+                    tracer.delegator[tracer.callback]( tracer.ctx );
+                }
+                else {
+                    tracer.callback( tracer.ctx );
+                }
+            }
+            else {
+                tracer.tick = ( ontick === true );
+                callin.invokeMethod( tracer );
+            }
+        };
+    
+    if( !method ){
+        callin.findNextPathMethods( tracer );
+    }
+    // call delegate method
+    else if( typeof tracer.delegator[method.name] === 'function' )
+    {
+        if( tracer.tick )
+        {
+            process.nextTick( function(){
+                tracer.delegator[method.name]( 
+                    tracer.ctx, 
+                    method, 
+                    invokeNext, 
+                    tracer.tick
+                );
+            });
+        }
+        else
+        {
+            tracer.delegator[method.name]( 
+                tracer.ctx, 
+                method, 
+                invokeNext, 
+                tracer.tick
+            );
+        }
+    }
+    // next sibling
+    else {
+        callin.invokeMethod( tracer );
+    }
+};
+
 
 module.exports = callin;
 

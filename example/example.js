@@ -6,9 +6,9 @@ function sample()
 {
     var callin = new pkg.callin( this );
     
-    callin.set( require(__dirname + '/route.js') );
+    callin.setRoute( require(__dirname + '/route.js') );
     // console.log( JSON.stringify( callin.routes, false, '    ' ) );
-    callin.calling( '/home/pref/index.htm', false, 'sample context', function()
+    callin.calling( '/home/pref/index.htm/', false, 'sample context', function()
     {
         console.log( 'done' );
     });
